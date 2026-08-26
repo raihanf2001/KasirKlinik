@@ -62,3 +62,4 @@ The Laravel framework is open-sourced software licensed under the [MIT license](
 "# kasirklinik"  git init git add README.md git commit -m "first commit" git branch -M main git remote add origin https://github.com/raihanfadlh/kasirklinik.git git push -u origin main
 "# kasirklinik" 
 "# kasirklinik" 
+"# kasirklinik" 
