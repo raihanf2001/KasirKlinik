@@ -19,14 +19,14 @@ class UserController extends Controller
     {
         $request->validate([
             'name'     => 'required|string|max:255',
-            'email'    => 'required|string|email|unique:users',
+            'username'    => 'required|unique:users,username,',
             'password' => 'required|string|min:6',
             'is_admin' => 'required|in:0,1',
         ]);
 
         User::create([
             'name'     => $request->name,
-            'email'    => $request->email,
+            'username'    => $request->username,
             'password' => Hash::make($request->password), // Password wajib di-hash (enkripsi)
             'is_admin' => $request->is_admin,
         ]);
@@ -39,13 +39,13 @@ class UserController extends Controller
     {
         $request->validate([
             'name'     => 'required|string|max:255',
-            'email'    => 'required|string|email|unique:users,email,' . $user->id,
+            'username'    => 'required|unique:users,username,' . $user->id,
             'is_admin' => 'required|in:0,1',
         ]);
 
         $data = [
             'name'     => $request->name,
-            'email'    => $request->email,
+            'username'    => $request->username,
             'is_admin' => $request->is_admin,
         ];
 

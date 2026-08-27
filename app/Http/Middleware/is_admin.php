@@ -24,6 +24,6 @@ class is_admin
             }
             
         }
-        return redirect('/'); 
+        return redirect('/pos'); 
     }
 }

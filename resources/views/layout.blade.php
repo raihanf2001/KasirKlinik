@@ -265,12 +265,14 @@
             <i class="fa-solid fa-gear"></i> Pengaturan
         </a>
         @endif
+        @if (auth()->user()->is_admin==1)
         <a href="/" class="menu-item {{ request()->is('/') ? 'active' : '' }}">
             <i class="fa-solid fa-chart-pie"></i> Dashboard
         </a>
         <a href="/admin/products" class="menu-item {{ request()->is('admin/products*') ? 'active' : '' }}">
             <i class="fa-solid fa-box-open"></i> Kelola Produk
         </a>
+        @endif
         @if (auth()->user()->is_admin==1)
         <a href="/admin/report" class="menu-item {{ request()->is('admin/report*') ? 'active' : '' }}">
             <i class="fa-solid fa-receipt"></i> Data Transaksi

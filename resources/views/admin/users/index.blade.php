@@ -45,8 +45,8 @@
                 </div>
 
                 <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 500;">Alamat Email</label>
-                    <input type="email" id="email" name="email" placeholder="email@toko.com" required style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px;">
+                    <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 500;">Username</label>
+                    <input type="text" id="username" name="username" placeholder="username" required style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px;">
                 </div>
 
                 <div style="margin-bottom: 15px;">
@@ -86,7 +86,7 @@
                         <td style="padding: 12px 15px; color: #6b7280;">{{ $loop->iteration }}</td>
                         <td style="padding: 12px 15px;">
                             <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">{{ $user->name }}</div>
-                            <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 6px;">{{ $user->email }}</div>
+                            <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 6px;">{{ $user->username }}</div>
                             @if($user->is_online)
                                 <span style="background: #dcfce7; color: #16a34a; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
                                     <i class="fa-solid fa-circle" style="font-size: 0.5rem; margin-right: 3px; vertical-align: middle;"></i> Online
@@ -106,7 +106,7 @@
                             @endif
                         </td>
                         <td style="padding: 12px 15px; display: flex; justify-content: center; gap: 8px;">
-                            <button type="button" onclick="editUser({{ $user->id }}, '{{ addslashes($user->name) }}', '{{ addslashes($user->email) }}', {{ $user->is_admin }})" style="padding: 6px 10px; background: #fef9c3; color: #ca8a04; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                            <button type="button" onclick="editUser({{ $user->id }}, '{{ addslashes($user->name) }}', '{{ addslashes($user->username) }}', {{ $user->is_admin }})" style="padding: 6px 10px; background: #fef9c3; color: #ca8a04; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </button>
 
@@ -165,13 +165,13 @@
     }
 
     // Form Dinamis
-    function editUser(id, name, email, isAdmin) {
+    function editUser(id, name, username, isAdmin) {
         document.getElementById('formTitle').innerText = 'Edit Pengguna';
         document.getElementById('userForm').action = '/admin/users/' + id;
         document.getElementById('formMethod').value = 'PUT';
         
         document.getElementById('name').value = name;
-        document.getElementById('email').value = email;
+        document.getElementById('username').value = username;
         document.getElementById('is_admin').value = isAdmin;
         
         const passInput = document.getElementById('password');
@@ -191,7 +191,7 @@
         document.getElementById('formMethod').value = 'POST';
         
         document.getElementById('name').value = '';
-        document.getElementById('email').value = '';
+        document.getElementById('username').value = '';
         document.getElementById('is_admin').value = '0';
         
         const passInput = document.getElementById('password');
