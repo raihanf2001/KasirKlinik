@@ -18,7 +18,7 @@
     .p-card.focused { border-color: #4361ee; background-color: #f0f4ff; transform: translateY(-3px); box-shadow: 0 4px 12px rgba(67, 97, 238, 0.15); }
     .variant-badge { font-size: 0.75rem; background: #f3f4f6; padding: 2px 8px; border-radius: 10px; margin-top: 5px; display: inline-block; }
     
-    #paymentModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 999; }
+    #paymentModal, #customItemModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 999; }
     .modal-content { background: white; padding: 30px; border-radius: 20px; width: 450px; position: relative;}
     .method-btn { padding: 20px; border: 2px solid #e5e7eb; border-radius: 12px; cursor: pointer; text-align: center; flex: 1; transition: 0.2s; }
     .method-btn.active { border-color: #4361ee; background: #f0f3ff; box-shadow: 0 0 0 3px rgba(67,97,238,0.2); }
@@ -38,8 +38,7 @@
         <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
             <input type="text" id="posSearch" placeholder="Cari kode/nama (Panah ⬇️⬆️ & Enter = Pilih | F8 = Bayar)" style="flex: 1; padding:12px; border-radius:10px; border:1px solid #ddd; outline: none; font-size: 1rem; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
             
-            <!-- Tambahan Tampilan Nama Kasir di Header -->
-            <div style="background: #fff; border: 1px solid #ddd; padding: 8px 15px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; color: #374151;">
+            <div style="background: #fff; border: 1px solid #ddd; padding: 8px 15px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; color: #374151; white-space: nowrap;">
                 <i class="fa-solid fa-user-circle" style="color: {{ $appSetting->theme_color ?? '#4361ee' }};"></i>
                 Kasir: {{ auth()->user()->name ?? 'Guest' }}
             </div>
@@ -47,12 +46,16 @@
             <div style="background: #e0e7ff; color: #4361ee; padding: 8px 15px; border-radius: 10px; font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 8px; white-space: nowrap;">
                 <span style="width: 10px; height: 10px; background: #4361ee; border-radius: 50%; display: inline-block; animation: blink 1s infinite;"></span> Data Live
             </div>
+
+            <button onclick="openCustomModal()" style="background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 10px; font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; transition: 0.3s;">
+                <i class="fa-solid fa-plus"></i> Item Manual
+            </button>
         </div>
         
         <div class="product-grid" id="posProductGrid">
             @foreach($products as $p)
                 @foreach($p->variants as $v)
-                <div class="p-card" onclick="addToCart({ id: {{$v->id}}, product_id: {{$p->id}}, name: '{{ addslashes($p->nama_barang) }}', variant: '{{ addslashes($v->keterangan) }}', price: {{$v->harga}} })">
+                <div class="p-card" onclick="addToCart({ name: '{{ addslashes($p->nama_barang) }}', variant: '{{ addslashes($v->keterangan) }}', price: {{$v->harga}} })">
                     <div style="font-weight: 600; font-size: 0.95rem;">{{$p->nama_barang}}</div>
                     <div class="variant-badge">{{$v->keterangan}}</div>
                     <div style="color: {{ $appSetting->sidebar_color ?? '#111827' }}; font-weight: 700; margin-top: 10px;">Rp {{number_format($v->harga,0,',','.')}}</div>
@@ -68,8 +71,7 @@
             <i class="fa-solid fa-cart-shopping" style="color: {{ $appSetting->theme_color ?? '#4361ee' }}"></i>
         </div>
         
-        <div id="cartItems" style="flex: 1; overflow-y: auto; padding: 20px;">
-        </div>
+        <div id="cartItems" style="flex: 1; overflow-y: auto; padding: 20px;"></div>
 
         <div style="padding: 20px; background: #f9fafb; border-radius: 0 0 15px 15px; border-top: 1px solid #eee;">
             <div style="display:flex; justify-content:space-between; margin-bottom: 15px; font-weight: 700; color: {{ $appSetting->sidebar_color ?? '#111827' }}; font-size: 1.3rem;">
@@ -84,6 +86,7 @@
     </div>
 </div>
 
+<!-- MODAL PEMBAYARAN -->
 <div id="paymentModal">
     <div class="modal-content">
         <h3 style="margin-bottom: 10px; text-align: center;">Konfirmasi Pembayaran</h3>
@@ -119,15 +122,35 @@
     </div>
 </div>
 
+<!-- MODAL ITEM MANUAL / CUSTOM -->
+<div id="customItemModal">
+    <div class="modal-content" style="width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <h3 style="margin-bottom: 20px; text-align: center; color: #1f2937;">Tambah Item Manual</h3>
+        
+        <div style="margin-bottom: 15px;">
+            <label style="font-weight: 600; font-size: 0.9rem; color: #4b5563;">Nama Barang / Jasa:</label>
+            <input type="text" id="customItemName" placeholder="Contoh: Biaya Admin / Ongkir" style="width: 100%; padding: 12px; margin-top: 8px; border-radius: 10px; border: 1px solid #cbd5e1; outline: none; font-size: 1rem;">
+        </div>
+        
+        <div style="margin-bottom: 25px;">
+            <label style="font-weight: 600; font-size: 0.9rem; color: #4b5563;">Harga (Rp):</label>
+            <input type="number" id="customItemPrice" placeholder="Contoh: 15000" style="width: 100%; padding: 12px; margin-top: 8px; border-radius: 10px; border: 1px solid #cbd5e1; outline: none; font-size: 1rem;">
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+            <button onclick="closeCustomModal()" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-weight: 600; color: #4b5563;">Batal</button>
+            <button onclick="addCustomItemToCart()" style="flex: 1; padding: 12px; border-radius: 10px; background: #10b981; color: white; border: none; cursor: pointer; font-weight: 700;">Tambahkan</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let cart = [];
     let total = 0;
     let paymentMethod = '';
     let currentFocus = -1; 
     
-    // --- AMBIL DATA KASIR DI SINI AGAR TIDAK PERLU DIULANG-ULANG ---
     const cashierName = '{{ addslashes(auth()->user()->name ?? "Guest") }}';
-    const cashierId = '{{ auth()->user()->id ?? null }}';
 
     setInterval(() => {
         const searchInput = document.getElementById('posSearch');
@@ -151,14 +174,16 @@
 
     document.addEventListener('keydown', function(e) {
         const paymentModal = document.getElementById('paymentModal');
-        const isModalOpen = paymentModal.style.display === 'flex';
+        const customModal = document.getElementById('customItemModal');
+        const isPaymentModalOpen = paymentModal.style.display === 'flex';
+        const isCustomModalOpen = customModal.style.display === 'flex';
 
         if (e.key === 'F8') {
             e.preventDefault();
-            if (!isModalOpen) openPayment();
+            if (!isPaymentModalOpen && !isCustomModalOpen) openPayment();
         }
 
-        if (isModalOpen) {
+        if (isPaymentModalOpen) {
             if (e.key === 'Escape') {
                 e.preventDefault();
                 closePayment();
@@ -174,6 +199,11 @@
                 e.preventDefault();
                 submitPayment();
             }
+        }
+
+        if (isCustomModalOpen && e.key === 'Escape') {
+            e.preventDefault();
+            closeCustomModal();
         }
     });
 
@@ -193,14 +223,15 @@
                     .then(response => response.json())
                     .then(products => {
                         let html = '';
-                        products.forEach(p => {
-                            p.variants.forEach(v => {
-                                let priceFormatted = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v.harga);
+                        products.forEach(prod => {
+                            prod.variants.forEach(varItem => {
+                                let priceFormatted = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(varItem.harga);
                                 html += `
-                                <div class="p-card" onclick="addToCart({ id: ${v.id}, product_id: ${p.id}, name: '${p.nama_barang.replace(/'/g, "\\'")}', variant: '${v.keterangan.replace(/'/g, "\\'")}', price: ${v.harga} })">
-                                    <div style="font-weight: 600; font-size: 0.95rem;">${p.nama_barang}</div>
-                                    <div class="variant-badge">${v.keterangan}</div>
-                                    <div style="color: {{ $appSetting->sidebar_color ?? '#111827' }}; font-weight: 700; margin-top: 10px;">${priceFormatted}</div>
+                                <div class="p-card" onclick="addToCart({ name: '${prod.nama_barang.replace(/'/g, "\\'")}', variant: '${varItem.keterangan.replace(/'/g, "\\'")}', price: ${varItem.harga} })">
+                                    <div style="font-weight: 600; font-size: 0.95rem;">${prod.nama_barang}</div>
+                                    <div style="font-weight: 600; font-size: 0.70rem; color: #4361ee;">${prod.kode_barang}</div>
+                                    <div class="variant-badge">${varItem.keterangan}</div>
+                                    <div style="color: #111827; font-weight: 700; margin-top: 10px;">${priceFormatted}</div>
                                 </div>`;
                             });
                         });
@@ -246,19 +277,17 @@
                                     
                                     let priceFormatted = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(varItem.harga);
                                     html += `
-                                    <div class="p-card" onclick="addToCart({ id: ${varItem.id}, product_id: ${prod.id}, name: '${prod.nama_barang.replace(/'/g, "\\'")}', variant: '${varItem.keterangan.replace(/'/g, "\\'")}', price: ${varItem.harga} })">
+                                    <div class="p-card" onclick="addToCart({ name: '${prod.nama_barang.replace(/'/g, "\\'")}', variant: '${varItem.keterangan.replace(/'/g, "\\'")}', price: ${varItem.harga} })">
                                         <div style="font-weight: 600; font-size: 0.95rem;">${prod.nama_barang}</div>
-                                        <div style="font-weight: 600; font-size: 0.70rem; color: {{ $appSetting->theme_color ?? '#4361ee' }};">${prod.kode_barang}</div>
+                                        <div style="font-weight: 600; font-size: 0.70rem; color: #4361ee;">${prod.kode_barang}</div>
                                         <div class="variant-badge">${varItem.keterangan}</div>
-                                        <div style="color: {{ $appSetting->sidebar_color ?? '#111827' }}; font-weight: 700; margin-top: 10px;">${priceFormatted}</div>
+                                        <div style="color: #111827; font-weight: 700; margin-top: 10px;">${priceFormatted}</div>
                                     </div>`;
                                 });
                             });
 
                             if (totalVariants === 1) {
                                 addToCart({ 
-                                    id: singleVariantObj.id, 
-                                    product_id: singleProductObj.id, 
                                     name: singleProductObj.nama_barang.replace(/'/g, "\\'"), 
                                     variant: singleVariantObj.keterangan.replace(/'/g, "\\'"), 
                                     price: singleVariantObj.harga
@@ -286,6 +315,39 @@
         });
     }
 
+    function openCustomModal() {
+        document.getElementById('customItemModal').style.display = 'flex';
+        document.getElementById('customItemName').value = '';
+        document.getElementById('customItemPrice').value = '';
+        setTimeout(() => document.getElementById('customItemName').focus(), 100);
+    }
+
+    function closeCustomModal() {
+        document.getElementById('customItemModal').style.display = 'none';
+        if(posSearchInput) posSearchInput.focus();
+    }
+
+    function addCustomItemToCart() {
+        const name = document.getElementById('customItemName').value.trim();
+        const price = parseFloat(document.getElementById('customItemPrice').value);
+
+        if(!name) return alert('Nama barang/jasa tidak boleh kosong!');
+        if(isNaN(price) || price < 0) return alert('Masukkan nominal harga yang valid!');
+
+        addToCart({ name: name, variant: 'Manual Input', price: price });
+        closeCustomModal();
+    }
+
+    const customItemPriceInput = document.getElementById('customItemPrice');
+    if(customItemPriceInput) {
+        customItemPriceInput.addEventListener('keydown', function(e) {
+            if(e.key === 'Enter') {
+                e.preventDefault();
+                addCustomItemToCart();
+            }
+        });
+    }
+
     function addActive(cards) {
         if (!cards || cards.length === 0) return false;
         removeActive(cards);
@@ -302,14 +364,14 @@
     }
 
     function addToCart(v) {
-        let item = cart.find(i => i.variant_id === v.id);
+        let item = cart.find(i => i.product_id === v.name && i.variant_id === v.variant);
         
         if(item) {
             item.qty++;
         } else {
             cart.push({ 
-                variant_id: v.id, 
-                product_id: v.product_id, 
+                product_id: v.name, 
+                variant_id: v.variant, 
                 name: v.name, 
                 variant: v.variant, 
                 price: v.price, 
@@ -345,7 +407,7 @@
                         <div style="flex:1;">
                             <div style="font-weight:700; font-size:0.9rem; color:#1e293b;">${item.name}</div>
                             <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">${item.variant}</div>
-                            <div style="font-weight:600; color:{{ $appSetting->sidebar_color ?? '#111827' }}; font-size:0.85rem;">Rp ${item.price.toLocaleString('id-ID')}</div>
+                            <div style="font-weight:600; color:#111827; font-size:0.85rem;">Rp ${item.price.toLocaleString('id-ID')}</div>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; background:#f8fafc; padding:4px 8px; border-radius:8px; border:1px solid #e2e8f0;">
                             <button onclick="updateQty(${index}, -1)" style="border:none; background:none; cursor:pointer; color:#ef4444; font-weight:bold; font-size:1rem;">-</button>
@@ -382,7 +444,6 @@
         document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('sectionCash').style.display = 'none';
         document.getElementById('sectionQRIS').style.display = 'none';
-        
         if(posSearchInput) posSearchInput.focus(); 
     }
 
@@ -423,9 +484,7 @@
                 payment_method: paymentMethod, 
                 amount_paid: paid,
                 change_amount: (paid - total > 0) ? (paid - total) : 0,
-                // --- PENGIRIMAN DATA KASIR DISINI ---
-                cashier_name: cashierName,
-                cashier_id: cashierId
+                cashier_name: cashierName
             })
         });
 

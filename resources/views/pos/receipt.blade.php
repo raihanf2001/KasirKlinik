@@ -75,14 +75,14 @@
         @foreach($transaction->details as $item)
         <tr>
             <td colspan="3" style="padding-bottom: 2px;">
-                <span class="font-bold">{{ $item->product->nama_barang }}</span> 
-                @if($item->variant)
-                    ({{ $item->variant->keterangan }})
+                <span class="font-bold">{{ $item->product_id }}</span> 
+                @if($item->variant_id)
+                    ({{ $item->variant_id }})
                 @endif
             </td>
         </tr>
         <tr>
-            <td style="width: 20%;">{{ $item->qty }}x</td>
+            {{-- <td style="width: 20%;">{{ $item->qty }}x</td> --}}
             <td class="text-right font-bold">{{ number_format($item->price, 0, ',', '.') }}</td>
         </tr>
         @endforeach

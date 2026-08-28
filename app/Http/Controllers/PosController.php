@@ -22,10 +22,8 @@ class PosController extends Controller
     {
         $query = $request->get('query');
 
-       $products = Product::with(['variants', 'category'])
-            // 1. Cari berdasarkan nama_barang di tabel products
+        $products = Product::with(['variants', 'category'])
             ->where('nama_barang', 'LIKE', "%{$query}%")
-            // 2. ATAU cari berdasarkan keterangan di tabel product_variants
             ->orWhereHas('variants', function ($q) use ($query) {
                 $q->where('keterangan', 'LIKE', "%{$query}%");
             })
@@ -47,13 +45,13 @@ class PosController extends Controller
                 'change_amount'  => $request->change_amount,
             ]);
 
-            // 2. Simpan Detail (Tanpa Qty dan Tanpa Potong Stok)
+            // 2. Simpan Detail Pesanan menggunakan String (Nama Barang & Keterangan)
             foreach ($request->cart as $item) {
                 TransactionDetail::create([
                     'transaction_id' => $transaction->id,
-                    'nama_user' => $request->cashier_name ?? Auth::user()->name,
-                    'product_id'     => $item['product_id'],
-                    'variant_id'     => $item['variant_id'],
+                    'nama_user'      => $request->cashier_name ?? Auth::user()->name,
+                    'product_id'     => $item['product_id'], // Berisi Nama Barang dari Frontend
+                    'variant_id'     => $item['variant_id'], // Berisi Keterangan Varian dari Frontend
                     'price'          => $item['price'],
                 ]);
             }
@@ -71,7 +69,8 @@ class PosController extends Controller
 
     public function receipt($id)
     {
-        $transaction = transaction::with(['details.product', 'details.variant'])->findOrFail($id);
+        // Relasi details.product dan details.variant dihapus karena sudah tidak memakai Foreign Key
+        $transaction = transaction::with(['details'])->findOrFail($id);
         
         return view('pos.receipt', compact('transaction'));
     }

@@ -1,10 +1,13 @@
 <?php
 
 namespace App\Http\Controllers;
+
+use App\Exports\PenjualanExport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\TransactionDetail;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
@@ -68,5 +71,11 @@ class ReportController extends Controller
         
         // Unduh file PDF
         return $pdf->download('Laporan_Penjualan_' . date('Ymd') . '.pdf');
+    }
+     public function exportExcel(Request $request)
+    {
+        $data = $this->getFilteredData($request);
+        // Lempar $details DAN $title ke dalam PenjualanExport
+        return Excel::download(new PenjualanExport($data['details'], $data['title']), 'Laporan_Penjualan_' . date('Ymd') . '.xlsx');
     }
 }

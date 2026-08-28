@@ -28,6 +28,7 @@ Route::middleware(is_admin::class)->group(function (){
     Route::delete('/admin/users/{user}', [UserController::class, 'destroy']);
     Route::get('/admin/report', [ReportController::class, 'index']);
     Route::get('/admin/report/pdf', [ReportController::class, 'exportPdf']);
+    Route::get('/admin/pos/export-excel', [ReportController::class, 'exportExcel'])->name('report.exportExcel');
     Route::resource('admin/products', ProductController::class);
 });
 

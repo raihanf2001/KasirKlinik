@@ -49,7 +49,7 @@
             <tr>
                 <td>{{ $d->created_at->format('d/m/Y H:i') }}</td>
                 <td>{{ $d->nama_user }}</td>
-                <td>{{ $d->product->nama_barang ?? 'Produk Dihapus' }} ({{ $d->variant->keterangan ?? '-' }})</td>
+                <td>{{ $d->product_id ?? 'Produk Dihapus' }} ({{ $d->variant_id ?? '-' }})</td>
                 <td class="text-right">Rp {{ number_format($d->price, 0, ',', '.') }}</td>
             </tr>
             @endforeach

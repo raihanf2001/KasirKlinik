@@ -13,6 +13,9 @@
         <a href="/admin/report/pdf?{{ http_build_query(request()->all()) }}" style="padding: 10px 20px; background: #dc2626; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">
             <i class="fa-solid fa-file-pdf"></i> Download PDF
         </a>
+        <a href="{{ route('report.exportExcel', request()->query()) }}" style="background: #10b981; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-file-excel"></i> Export Excel
+        </a>
     </div>
 
     <form action="/admin/report" method="GET" style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb; margin-bottom: 25px; display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
@@ -71,9 +74,9 @@
                 @endphp
                 <tr style="border-bottom: 1px solid #f1f5f9;">
                     <td style="padding: 15px; font-size: 0.85rem;">{{ $d->created_at->format('d/m/Y H:i') }}</td>
-                    <td style="padding: 15px; font-weight: 600;">{{ $d->product->nama_barang ?? 'Produk Dihapus' }}</td>
+                    <td style="padding: 15px; font-weight: 600;">{{ $d->product_id ?? 'Produk Dihapus' }}</td>
                     <td style="padding: 15px; font-weight: 600;">{{ $d->nama_user }}</td>
-                    <td style="padding: 15px; font-size: 0.85rem; color: #64748b;">{{ $d->variant->keterangan ?? '-' }}</td>
+                    <td style="padding: 15px; font-size: 0.85rem; color: #64748b;">{{ $d->variant_id ?? '-' }}</td>
                     <td style="padding: 15px; color: #4361ee;">Rp {{ number_format($d->price, 0, ',', '.') }}</td>
                 </tr>
                 @empty
@@ -124,5 +127,13 @@
             })
             .catch(error => console.error('Gagal mengambil data live:', error));
     }, 3000);
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script>
+function ExportToExcel(tableId, filename = 'Laporan.xlsx') {
+    var table = document.getElementById(tableId);
+    var wb = XLSX.utils.table_to_book(table, {sheet: "Sheet 1"});
+    XLSX.writeFile(wb, filename);
+}
 </script>
 @endsection
