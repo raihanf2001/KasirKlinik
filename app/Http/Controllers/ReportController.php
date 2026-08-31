@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\PenjualanExport;
 use Barryvdh\DomPDF\Facade\Pdf;
-use App\Models\TransactionDetail;
+use App\Models\Transaction; // Pastikan model Transaction di-import (ganti dari TransactionDetail)
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -14,7 +14,10 @@ class ReportController extends Controller
     // Fungsi bantuan untuk mengambil dan memfilter data
     private function getFilteredData(Request $request)
     {
-        $query = TransactionDetail::with(['product', 'transaction'])->latest();
+        // Ubah query utama ke model Transaction, dan muat relasi details & product
+        // Tambahkan relasi 'user' jika nama kasir diambil dari tabel users
+        $query = Transaction::with(['details.product'])->latest();
+        
         $filter = $request->filter ?? 'today'; // Default hari ini
         $title = 'Laporan Penjualan';
 
@@ -40,18 +43,23 @@ class ReportController extends Controller
             }
         }
 
-        $details = $query->get();
+        $transactions = $query->get();
 
-        // Hitung Total Laba
+        // Hitung Total Laba / Omzet
         $totalOmzet = 0;
 
-        foreach ($details as $d) {
-            $omzet = $d->price;
+        foreach ($transactions as $t) {
+            // Gunakan kolom total dari tabel transaksi jika ada (misal: total_price atau total)
+            // Jika tidak ada, kita kalkulasi dari harga * qty di detailnya
+            $omzet = $t->total_price ?? $t->total ?? $t->details->sum(function($d) {
+                return $d->price;
+            });
             
             $totalOmzet += $omzet;
         }
 
-        return compact('details', 'totalOmzet', 'filter', 'title', 'request');
+        // Return 'transactions', bukan 'details'
+        return compact('transactions', 'totalOmzet', 'filter', 'title', 'request');
     }
 
     // Fungsi menampilkan halaman web
@@ -66,16 +74,19 @@ class ReportController extends Controller
     {
         $data = $this->getFilteredData($request);
         
-        // Load view khusus PDF (tanpa CSS kompleks)
+        // Load view khusus PDF
         $pdf = Pdf::loadView('admin.report.pdf', $data);
         
         // Unduh file PDF
         return $pdf->download('Laporan_Penjualan_' . date('Ymd') . '.pdf');
     }
-     public function exportExcel(Request $request)
+
+    // Fungsi Export ke Excel
+    public function exportExcel(Request $request)
     {
         $data = $this->getFilteredData($request);
-        // Lempar $details DAN $title ke dalam PenjualanExport
-        return Excel::download(new PenjualanExport($data['details'], $data['title']), 'Laporan_Penjualan_' . date('Ymd') . '.xlsx');
+        
+        // Lempar $transactions DAN $title ke dalam PenjualanExport
+        return Excel::download(new PenjualanExport($data['transactions'], $data['title']), 'Laporan_Penjualan_' . date('Ymd') . '.xlsx');
     }
 }
