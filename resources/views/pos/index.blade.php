@@ -35,17 +35,16 @@
 
 <div class="pos-container">
     <div class="product-list">
-        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
-            <input type="text" id="posSearch" placeholder="Cari kode/nama (Panah ⬇️⬆️ & Enter = Pilih | F8 = Bayar)" style="flex: 1; padding:12px; border-radius:10px; border:1px solid #ddd; outline: none; font-size: 1rem; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
-            
+        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">            
             <div style="background: #fff; border: 1px solid #ddd; padding: 8px 15px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; color: #374151; white-space: nowrap;">
                 <i class="fa-solid fa-user-circle" style="color: {{ $appSetting->theme_color ?? '#4361ee' }};"></i>
                 Kasir: {{ auth()->user()->name ?? 'Guest' }}
             </div>
 
-            <div style="background: #e0e7ff; color: #4361ee; padding: 8px 15px; border-radius: 10px; font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 8px; white-space: nowrap;">
-                <span style="width: 10px; height: 10px; background: #4361ee; border-radius: 50%; display: inline-block; animation: blink 1s infinite;"></span> Data Live
-            </div>
+            <!-- TOMBOL KONEKSI PRINTER BLUETOOTH -->
+            <button onclick="connectPrinter()" id="btnConnectPrinter" style="background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 10px; font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap;">
+                <i class="fa-brands fa-bluetooth"></i> <span id="printerStatusText">Hubungkan Printer</span>
+            </button>
 
             <button onclick="openCustomModal()" style="background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 10px; font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; transition: 0.3s;">
                 <i class="fa-solid fa-plus"></i> Item Manual
@@ -116,13 +115,13 @@
         </div>
 
         <div style="margin-top: 30px; display: flex; gap: 10px;">
-            <button onclick="closePayment()" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-weight: 600;">Batal [ESC]</button>
-            <button onclick="submitPayment()" id="btnSubmit" style="flex: 2; padding: 12px; border-radius: 8px; background: {{ $appSetting->theme_color ?? '#4361ee' }}; color: white; border: none; cursor: pointer; font-weight: 700;">KONFIRMASI [ENTER]</button>
+            <button onclick="closePayment()" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-weight: 600;">Batal</button>
+            <button onclick="submitPayment()" id="btnSubmit" style="flex: 2; padding: 12px; border-radius: 8px; background: {{ $appSetting->theme_color ?? '#4361ee' }}; color: white; border: none; cursor: pointer; font-weight: 700;">KONFIRMASI</button>
         </div>
     </div>
 </div>
 
-<!-- MODAL ITEM MANUAL / CUSTOM -->
+<!-- MODAL ITEM MANUAL -->
 <div id="customItemModal">
     <div class="modal-content" style="width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
         <h3 style="margin-bottom: 20px; text-align: center; color: #1f2937;">Tambah Item Manual</h3>
@@ -143,18 +142,308 @@
         </div>
     </div>
 </div>
-
 <script>
     let cart = [];
     let total = 0;
     let paymentMethod = '';
-    let currentFocus = -1; 
-    
+    let currentFocus = -1;
+
+    // FIX: printCharacteristic must be a real global so submitPayment() can see it.
+    let printCharacteristic = null;
+    let printerDevice = null;
+
     const cashierName = '{{ addslashes(auth()->user()->name ?? "Guest") }}';
+
+    // ---- Logo & nama toko untuk struk ----
+    // Pastikan controller/view meneruskan $appSetting ke halaman POS ini
+    // (sama seperti halaman struk), supaya URL logo & nama toko tersedia di sini.
+    const STORE_LOGO_URL = '{{ isset($appSetting) && $appSetting->logo_path ? asset($appSetting->logo_path) : "" }}';
+    const STORE_NAME = '{{ addslashes(strtoupper($appSetting->app_name ?? "TOKO")) }}';
+    const STORE_ADDRESS = '{{ addslashes($appSetting->address ?? "") }}';
+    const STORE_PHONE = '{{ addslashes($appSetting->phone ?? "") }}';
+    // Lebar cetak dalam dot. 58mm printer umumnya ~384 dot, 80mm ~576 dot.
+    const PRINTER_WIDTH_DOTS = 384;
+    // Logo dicetak 1/4 dari lebar kertas (sebelumnya 1/2, sekarang diperkecil setengah lagi).
+    const LOGO_WIDTH_DOTS = Math.floor(PRINTER_WIDTH_DOTS / 4);
+
+    let cachedLogoRaster = null;
+    let logoLoadFailed = false;
+
+    async function connectPrinter() {
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'] // UUID Standard Printer Thermal
+            });
+
+            await bindPrinterDevice(device);
+
+            alert('Berhasil terhubung ke Printer: ' + device.name);
+        } catch (error) {
+            console.error(error);
+            alert('Gagal menghubungkan printer. Pastikan Bluetooth aktif dan web diakses via HTTPS.');
+        }
+    }
+
+    // Menyambungkan GATT server + characteristic untuk device yang sudah dipilih,
+    // dan memasang listener disconnect. Dipakai baik saat pairing pertama kali
+    // maupun saat auto-reconnect (tanpa requestDevice lagi).
+    async function bindPrinterDevice(device) {
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+        printCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+        printerDevice = device;
+
+        // Pasang listener hanya sekali per device (hindari listener dobel saat reconnect)
+        if (!device.__disconnectListenerAttached) {
+            device.addEventListener('gattserverdisconnected', onPrinterDisconnected);
+            device.__disconnectListenerAttached = true;
+        }
+
+        let btn = document.getElementById('btnConnectPrinter');
+        if (btn) btn.style.background = '#10b981';
+        let statusEl = document.getElementById('printerStatusText');
+        if (statusEl) statusEl.innerText = 'Printer Terhubung: ' + device.name;
+    }
+
+    function onPrinterDisconnected() {
+        // Jangan null-kan printerDevice di sini. GATT server thermal printer sering
+        // idle-disconnect setelah beberapa saat tidak ada aktivitas, tapi device
+        // (hasil pairing Bluetooth) tetap valid dan bisa disambungkan ulang lewat
+        // device.gatt.connect() TANPA memunculkan dialog pairing lagi.
+        printCharacteristic = null;
+
+        let btn = document.getElementById('btnConnectPrinter');
+        if (btn) btn.style.background = '#f59e0b';
+        let statusEl = document.getElementById('printerStatusText');
+        if (statusEl) statusEl.innerText = 'Printer idle/terputus sementara (akan otomatis tersambung lagi saat mencetak)';
+    }
+
+    // Dipanggil sebelum tiap kali cetak. Kalau koneksi GATT sempat putus,
+    // sambungkan ulang otomatis pakai device yang sama - hanya pairing sekali di awal.
+    async function ensurePrinterConnected() {
+        if (!printerDevice) {
+            throw new Error('Printer belum pernah dipasangkan. Klik tombol Hubungkan Printer terlebih dahulu.');
+        }
+        if (printerDevice.gatt.connected && printCharacteristic) {
+            return;
+        }
+        await bindPrinterDevice(printerDevice);
+    }
+
+    // ---------- Logo -> ESC/POS raster bitmap ----------
+
+    function loadImageElement(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('Gagal memuat logo dari ' + url));
+            img.src = url;
+        });
+    }
+
+    // Mengubah gambar menjadi perintah raster ESC/POS (GS v 0) dengan dithering
+    // Floyd-Steinberg supaya logo tetap terlihat jelas di printer hitam-putih.
+    function imageToEscPosRaster(img, maxWidthDots) {
+        const srcW = img.naturalWidth || img.width;
+        const srcH = img.naturalHeight || img.height;
+
+        let targetWidth = Math.min(maxWidthDots, srcW);
+        targetWidth = targetWidth - (targetWidth % 8); // harus kelipatan 8
+        if (targetWidth <= 0) targetWidth = 8;
+
+        const scale = targetWidth / srcW;
+        const targetHeight = Math.max(1, Math.round(srcH * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+        const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+        const pixels = imageData.data;
+
+        const gray = new Float32Array(targetWidth * targetHeight);
+        for (let i = 0; i < targetWidth * targetHeight; i++) {
+            const r = pixels[i * 4], g = pixels[i * 4 + 1], b = pixels[i * 4 + 2];
+            gray[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+        }
+
+        const bw = new Uint8Array(targetWidth * targetHeight); // 0 = hitam, 255 = putih
+        for (let y = 0; y < targetHeight; y++) {
+            for (let x = 0; x < targetWidth; x++) {
+                const idx = y * targetWidth + x;
+                const oldPixel = gray[idx];
+                const newPixel = oldPixel < 128 ? 0 : 255;
+                bw[idx] = newPixel;
+                const err = oldPixel - newPixel;
+
+                if (x + 1 < targetWidth) gray[idx + 1] += err * 7 / 16;
+                if (y + 1 < targetHeight) {
+                    if (x - 1 >= 0) gray[idx + targetWidth - 1] += err * 3 / 16;
+                    gray[idx + targetWidth] += err * 5 / 16;
+                    if (x + 1 < targetWidth) gray[idx + targetWidth + 1] += err * 1 / 16;
+                }
+            }
+        }
+
+        const bytesPerRow = targetWidth / 8;
+        const raster = new Uint8Array(bytesPerRow * targetHeight);
+
+        for (let y = 0; y < targetHeight; y++) {
+            for (let byteX = 0; byteX < bytesPerRow; byteX++) {
+                let byteVal = 0;
+                for (let bit = 0; bit < 8; bit++) {
+                    const x = byteX * 8 + bit;
+                    if (bw[y * targetWidth + x] === 0) {
+                        byteVal |= (1 << (7 - bit));
+                    }
+                }
+                raster[y * bytesPerRow + byteX] = byteVal;
+            }
+        }
+
+        const xL = bytesPerRow & 0xFF;
+        const xH = (bytesPerRow >> 8) & 0xFF;
+        const yL = targetHeight & 0xFF;
+        const yH = (targetHeight >> 8) & 0xFF;
+
+        const GS = 0x1D;
+        const header = [GS, 0x76, 0x30, 0x00, xL, xH, yL, yH]; // GS v 0, mode normal
+        return header.concat(Array.from(raster));
+    }
+
+    async function getLogoRasterBytes() {
+        if (cachedLogoRaster) return cachedLogoRaster;
+        if (logoLoadFailed) return null;
+        if (!STORE_LOGO_URL) return null;
+
+        try {
+            const img = await loadImageElement(STORE_LOGO_URL);
+            cachedLogoRaster = imageToEscPosRaster(img, LOGO_WIDTH_DOTS);
+            return cachedLogoRaster;
+        } catch (err) {
+            console.error('Gagal memproses logo untuk cetak Bluetooth:', err);
+            logoLoadFailed = true; // jangan coba berulang-ulang tiap transaksi kalau memang gagal
+            return null;
+        }
+    }
+
+    // ---------- ESC/POS receipt builder ----------
+
+    async function buildReceiptData(payload, res) {
+        const ESC = 0x1B, GS = 0x1D;
+        const bytes = [];
+
+        const push = (arr) => arr.forEach(b => bytes.push(b));
+        const pushText = (str) => push(Array.from(new TextEncoder().encode(str)));
+
+        const initPrinter   = () => push([ESC, 0x40]);
+        const alignCenter   = () => push([ESC, 0x61, 0x01]);
+        const alignLeft     = () => push([ESC, 0x61, 0x00]);
+        const boldOn        = () => push([ESC, 0x45, 0x01]);
+        const boldOff       = () => push([ESC, 0x45, 0x00]);
+        const feed          = (n = 1) => push([ESC, 0x64, n]);
+        const cutPaper      = () => push([GS, 0x56, 0x00]);
+        const line          = (str = '') => pushText(str + '\n');
+        const divider       = () => line('--------------------------------');
+
+        const money = (n) => 'Rp ' + Number(n).toLocaleString('id-ID');
+        const padRow = (left, right, width = 32) => {
+            left = String(left);
+            right = String(right);
+            let space = width - left.length - right.length;
+            if (space < 1) space = 1;
+            return left + ' '.repeat(space) + right;
+        };
+
+        initPrinter();
+        alignCenter();
+
+        // Cetak logo (kalau tersedia dan berhasil dikonversi) sebelum teks header.
+        const logoBytes = await getLogoRasterBytes();
+        if (logoBytes) {
+            push(logoBytes);
+            line(''); // jarak antara logo dan nama toko
+        }
+
+        boldOn();
+        line(STORE_NAME || 'TOKO');
+        boldOff();
+        line(''); // jarak antara nama toko dan alamat
+
+        if (STORE_ADDRESS) {
+            line(STORE_ADDRESS);
+            line(''); // jarak antara alamat dan no. HP / baris berikutnya
+        }
+
+        if (STORE_PHONE) {
+            line(STORE_PHONE);
+            line(''); // jarak antara no. HP dan tanggal transaksi
+        }
+
+        line(new Date().toLocaleString('id-ID'));
+        if (res && res.transaction_id) line('No. Transaksi: ' + res.transaction_id);
+        line('Kasir: ' + cashierName);
+        line(''); // jarak sebelum garis pemisah
+
+        alignLeft();
+        divider();
+
+        payload.cart.forEach(item => {
+            line(item.name + ' - ' + item.variant);
+            line(padRow(item.qty + ' x ' + money(item.price), money(item.price * item.qty)));
+        });
+
+        divider();
+        boldOn();
+        line(padRow('TOTAL', money(payload.grand_total)));
+        boldOff();
+        line(padRow('Metode', payload.payment_method));
+
+        if (payload.payment_method === 'CASH') {
+            line(padRow('Dibayar', money(payload.amount_paid)));
+            line(padRow('Kembali', money(payload.change_amount)));
+        }
+
+        divider();
+        alignCenter();
+        line('Terima kasih!');
+        feed(3);
+        cutPaper();
+
+        return new Uint8Array(bytes);
+    }
+
+    async function printToBluetoothPrinter(payload, res) {
+        // Pastikan tersambung dulu (auto-reconnect kalau sempat idle-disconnect,
+        // tanpa perlu pairing ulang lewat requestDevice).
+        await ensurePrinterConnected();
+
+        const data = await buildReceiptData(payload, res);
+
+        const CHUNK_SIZE = 100;
+        const useNoResponse = printCharacteristic.properties &&
+            printCharacteristic.properties.writeWithoutResponse;
+
+        for (let offset = 0; offset < data.length; offset += CHUNK_SIZE) {
+            const chunk = data.slice(offset, offset + CHUNK_SIZE);
+            if (useNoResponse) {
+                await printCharacteristic.writeValueWithoutResponse(chunk);
+            } else {
+                await printCharacteristic.writeValue(chunk);
+            }
+            await new Promise(r => setTimeout(r, 30));
+        }
+    }
 
     setInterval(() => {
         const searchInput = document.getElementById('posSearch');
-        if (searchInput && searchInput.value.trim() !== '') return; 
+        if (searchInput && searchInput.value.trim() !== '') return;
 
         fetch(window.location.href)
             .then(response => response.text())
@@ -214,8 +503,8 @@
         posSearchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
             let query = this.value;
-            currentFocus = -1; 
-            
+            currentFocus = -1;
+
             if(query.trim() === '') return;
 
             searchTimeout = setTimeout(() => {
@@ -243,11 +532,11 @@
 
         posSearchInput.addEventListener('keydown', function(e) {
             let cards = document.getElementById("posProductGrid").getElementsByClassName("p-card");
-            
+
             if (e.key === "ArrowDown") {
                 currentFocus++;
                 addActive(cards);
-                e.preventDefault(); 
+                e.preventDefault();
             } else if (e.key === "ArrowUp") {
                 currentFocus--;
                 addActive(cards);
@@ -274,7 +563,7 @@
                                     totalVariants++;
                                     singleVariantObj = varItem;
                                     singleProductObj = prod;
-                                    
+
                                     let priceFormatted = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(varItem.harga);
                                     html += `
                                     <div class="p-card" onclick="addToCart({ name: '${prod.nama_barang.replace(/'/g, "\\'")}', variant: '${varItem.keterangan.replace(/'/g, "\\'")}', price: ${varItem.harga} })">
@@ -287,9 +576,9 @@
                             });
 
                             if (totalVariants === 1) {
-                                addToCart({ 
-                                    name: singleProductObj.nama_barang.replace(/'/g, "\\'"), 
-                                    variant: singleVariantObj.keterangan.replace(/'/g, "\\'"), 
+                                addToCart({
+                                    name: singleProductObj.nama_barang.replace(/'/g, "\\'"),
+                                    variant: singleVariantObj.keterangan.replace(/'/g, "\\'"),
                                     price: singleVariantObj.harga
                                 });
                             } else if (totalVariants > 1) {
@@ -351,10 +640,10 @@
     function addActive(cards) {
         if (!cards || cards.length === 0) return false;
         removeActive(cards);
-        
+
         if (currentFocus >= cards.length) currentFocus = 0;
         if (currentFocus < 0) currentFocus = (cards.length - 1);
-        
+
         cards[currentFocus].classList.add("focused");
         cards[currentFocus].scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
@@ -365,22 +654,22 @@
 
     function addToCart(v) {
         let item = cart.find(i => i.product_id === v.name && i.variant_id === v.variant);
-        
+
         if(item) {
             item.qty++;
         } else {
-            cart.push({ 
-                product_id: v.name, 
-                variant_id: v.variant, 
-                name: v.name, 
-                variant: v.variant, 
-                price: v.price, 
-                qty: 1 
+            cart.push({
+                product_id: v.name,
+                variant_id: v.variant,
+                name: v.name,
+                variant: v.variant,
+                price: v.price,
+                qty: 1
             });
         }
-        
+
         renderCart();
-        
+
         if(posSearchInput) {
             posSearchInput.value = '';
             posSearchInput.focus();
@@ -400,7 +689,7 @@
         cart.forEach((item, index) => {
             let itemTotal = item.price * item.qty;
             total += itemTotal;
-            
+
             container.innerHTML += `
                 <div style="background: #fff; border: 1px solid #f1f5f9; padding: 12px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -422,7 +711,7 @@
     }
 
     function updateQty(index, delta) {
-        cart[index].qty += delta; 
+        cart[index].qty += delta;
         if(cart[index].qty <= 0) cart.splice(index, 1);
         renderCart();
     }
@@ -444,7 +733,7 @@
         document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('sectionCash').style.display = 'none';
         document.getElementById('sectionQRIS').style.display = 'none';
-        if(posSearchInput) posSearchInput.focus(); 
+        if(posSearchInput) posSearchInput.focus();
     }
 
     function selectMethod(m) {
@@ -452,7 +741,7 @@
         document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('sectionCash').style.display = (m === 'CASH') ? 'block' : 'none';
         document.getElementById('sectionQRIS').style.display = (m === 'QRIS') ? 'block' : 'none';
-        
+
         if(m === 'CASH') {
             document.getElementById('btnCash').classList.add('active');
             setTimeout(() => { document.getElementById('inputPaid').focus(); }, 100);
@@ -467,39 +756,86 @@
         document.getElementById('txtChange').innerText = 'Rp ' + (change > 0 ? change.toLocaleString('id-ID') : 0);
     }
 
+    // Reset tampilan POS setelah transaksi sukses TANPA reload seluruh halaman,
+    // supaya koneksi Bluetooth printer (printerDevice/printCharacteristic) tetap
+    // hidup dan tidak perlu pairing ulang di transaksi berikutnya.
+    async function resetPOSStateAfterSale() {
+        cart = [];
+        total = 0;
+        renderCart();
+        closePayment();
+
+        const inputPaidEl = document.getElementById('inputPaid');
+        if (inputPaidEl) inputPaidEl.value = '';
+        const txtChangeEl = document.getElementById('txtChange');
+        if (txtChangeEl) txtChangeEl.innerText = 'Rp 0';
+
+        // Refresh grid produk saja (stok bisa berubah), bukan seluruh halaman.
+        try {
+            const response = await fetch(window.location.href);
+            const html = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newGrid = doc.getElementById('posProductGrid');
+            const currentGrid = document.getElementById('posProductGrid');
+            if (newGrid && currentGrid) {
+                currentGrid.innerHTML = newGrid.innerHTML;
+                currentFocus = -1;
+            }
+        } catch (err) {
+            console.error('Gagal memperbarui daftar produk setelah transaksi:', err);
+        }
+
+        if (posSearchInput) posSearchInput.focus();
+    }
+
     async function submitPayment() {
         if(!paymentMethod) return alert('Pilih metode pembayaran!');
-        
+
         let paid = document.getElementById('inputPaid').value || 0;
         if(paymentMethod === 'CASH' && paid < total) return alert('Uang tunai kurang dari total tagihan!');
+
+        const payload = {
+            cart,
+            subtotal: total,
+            tax: 0,
+            grand_total: total,
+            payment_method: paymentMethod,
+            amount_paid: paid,
+            change_amount: (paid - total > 0) ? (paid - total) : 0,
+            cashier_name: cashierName
+        };
 
         let response = await fetch('/admin/pos/store', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-            body: JSON.stringify({
-                cart, 
-                subtotal: total, 
-                tax: 0, 
-                grand_total: total,
-                payment_method: paymentMethod, 
-                amount_paid: paid,
-                change_amount: (paid - total > 0) ? (paid - total) : 0,
-                cashier_name: cashierName
-            })
+            body: JSON.stringify(payload)
         });
 
         let res = await response.json();
         if(res.status === 'success') {
-            window.open('/admin/pos/receipt/' + res.transaction_id, '_blank');
-            alert('Pembayaran Berhasil! Mencetak struk...');
-            location.reload();
+            if (printerDevice) {
+                try {
+                    await printToBluetoothPrinter(payload, res);
+                } catch (printErr) {
+                    console.error(printErr);
+                    alert('Transaksi berhasil, tetapi gagal mencetak struk otomatis: ' + printErr.message + '\nMembuka struk di tab baru sebagai cadangan.');
+                    window.open('/admin/pos/receipt/' + res.transaction_id, '_blank');
+                }
+            } else {
+                alert('Printer Bluetooth belum terhubung. Membuka struk di tab baru sebagai cadangan.');
+                window.open('/admin/pos/receipt/' + res.transaction_id, '_blank');
+            }
+
+            alert('Pembayaran Berhasil!');
+            await resetPOSStateAfterSale();
         } else {
             alert('Gagal memproses transaksi: ' + res.message);
         }
     }
 
     renderCart();
-    
+
     window.onload = function() {
         if(posSearchInput) posSearchInput.focus();
     };
