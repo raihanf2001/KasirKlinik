@@ -80,9 +80,6 @@
                     ({{ $item->variant_id }})
                 @endif
             </td>
-        </tr>
-        <tr>
-            {{-- <td style="width: 20%;">{{ $item->qty }}x</td> --}}
             <td class="text-right font-bold">{{ number_format($item->price, 0, ',', '.') }}</td>
         </tr>
         @endforeach

@@ -14,7 +14,7 @@
         :root {
             --primary: {{ $appSetting->theme_color ?? '#4361ee' }};
             --sidebar-bg: {{ $appSetting->sidebar_color ?? '#111827' }};
-            --sidebar-hover: rgba(255, 255, 255, 0.1); /* Hover otomatis transparan putih */
+            --sidebar-hover: rgba(255, 255, 255, 0.1); 
             --bg-color: #f4f7fe;
             --card-bg: #ffffff;
             --text-main: #1f2937;
@@ -34,6 +34,7 @@
             color: var(--text-main);
             display: flex;
             min-height: 100vh;
+            overflow-x: hidden; /* Mencegah scroll menyamping di mobile */
         }
 
         /* Sidebar Styling */
@@ -59,12 +60,21 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px; /* Jarak antara logo dan teks */
+            gap: 12px;
         }
 
         .sidebar-menu {
             padding: 20px 0;
             flex: 1;
+            overflow-y: auto; /* Memastikan menu bisa di-scroll jika terlalu panjang */
+        }
+
+        .sidebar-menu::-webkit-scrollbar {
+            width: 5px;
+        }
+        .sidebar-menu::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
         }
 
         .menu-item {
@@ -96,6 +106,7 @@
             display: flex;
             flex-direction: column;
             transition: all 0.3s ease;
+            width: calc(100% - 260px);
         }
 
         /* Topbar */
@@ -108,7 +119,7 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             position: sticky;
             top: 0;
-            z-index: 99;
+            z-index: 90;
         }
 
         .menu-toggle {
@@ -116,7 +127,7 @@
             background: none;
             border: none;
             font-size: 1.5rem;
-            color: var(--text-main);
+            color: #ffffff; /* Diubah ke putih agar terlihat di topbar gelap */
             cursor: pointer;
         }
 
@@ -137,6 +148,7 @@
         /* Dashboard Content */
         .content-area {
             padding: 30px;
+            overflow-x: hidden;
         }
 
         .page-title {
@@ -148,7 +160,7 @@
         /* Stats Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
@@ -167,6 +179,7 @@
         .stat-icon {
             width: 60px;
             height: 60px;
+            min-width: 60px;
             border-radius: 12px;
             background-color: #e0e7ff;
             color: var(--primary);
@@ -209,6 +222,7 @@
             width: 100%;
             border-collapse: collapse;
             text-align: left;
+            min-width: 500px; /* Mencegah tabel menyusut terlalu kecil */
         }
 
         th, td {
@@ -220,6 +234,7 @@
             background-color: #f8fafc;
             color: var(--text-muted);
             font-weight: 600;
+            white-space: nowrap;
         }
 
         .status-badge {
@@ -229,6 +244,26 @@
             font-weight: 500;
             background-color: #dcfce7;
             color: #166534;
+            white-space: nowrap;
+        }
+
+        /* Overlay untuk Mobile Sidebar */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 99;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar-overlay.active {
+            opacity: 1;
+            visibility: visible;
         }
 
         /* Responsive Design */
@@ -238,62 +273,84 @@
             }
             .sidebar.active {
                 transform: translateX(0);
+                box-shadow: 4px 0 15px rgba(0,0,0,0.2);
             }
             .main-content {
                 margin-left: 0;
+                width: 100%;
             }
             .menu-toggle {
                 display: block;
+            }
+            .topbar {
+                padding: 15px 20px;
+            }
+            .content-area {
+                padding: 20px 15px;
+            }
+        }
+
+        /* Layar sangat kecil (HP posisi vertikal) */
+        @media (max-width: 480px) {
+            .admin-profile span {
+                display: none; /* Menyembunyikan nama agar topbar tidak bertumpuk */
+            }
+            .stats-grid {
+                grid-template-columns: 1fr; /* 1 Kolom penuh */
             }
         }
     </style>   
 </head>
 <body>
 
+    <!-- Overlay Latar Belakang saat Sidebar Aktif di Mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <aside class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-        @if($appSetting->logo_path)
-            <img src="{{ asset($appSetting->logo_path) }}" alt="Logo" style="width: 35px; height: 35px; object-fit: contain; border-radius: 5px; background-color: white; padding: 2px;">
-        @else
-            <i class="fa-solid fa-store"></i> 
-        @endif
-        <span style="font-size: 1.1rem;">{{ $appSetting->app_name }}</span>
-    </div>
-    <div class="sidebar-menu">
-        @if (auth()->user()->is_admin==1)
-        <a href="/admin/settings" class="menu-item {{ request()->is('admin/settings') ? 'active' : '' }}">
-            <i class="fa-solid fa-gear"></i> Pengaturan
-        </a>
-        @endif
-        @if (auth()->user()->is_admin==1)
-        <a href="/" class="menu-item {{ request()->is('/') ? 'active' : '' }}">
-            <i class="fa-solid fa-chart-pie"></i> Dashboard
-        </a>
-        <a href="/admin/products" class="menu-item {{ request()->is('admin/products*') ? 'active' : '' }}">
-            <i class="fa-solid fa-box-open"></i> Kelola Produk
-        </a>
-        @endif
-        @if (auth()->user()->is_admin==1)
-        <a href="/admin/report" class="menu-item {{ request()->is('admin/report*') ? 'active' : '' }}">
-            <i class="fa-solid fa-receipt"></i> Data Transaksi
-        </a>
-        @endif
-        <a href="/pos" class="menu-item {{ request()->is('pos') ? 'active' : '' }}">
-            <i class="fa-solid fa-money-bill"></i> Kasir
-        </a>
-        @if (auth()->user()->is_admin==1)
-        <a href="/users" class="menu-item {{ request()->is('users') ? 'active' : '' }}">
-            <i class="fa-solid fa-users"></i> User
-        </a>
-        @endif
-        <form id="logout-form" action="/logout" method="POST" style="display: none;">
-            @csrf
-        </form>
-        <a href="/logout" class="menu-item" style="margin-top: auto;" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-            <i class="fa-solid fa-right-from-bracket"></i> Logout
-        </a>
-    </div>
+        <div class="sidebar-header">
+            @if($appSetting->logo_path)
+                <img src="{{ asset($appSetting->logo_path) }}" alt="Logo" style="width: 35px; height: 35px; object-fit: contain; border-radius: 5px; background-color: white; padding: 2px;">
+            @else
+                <i class="fa-solid fa-store"></i> 
+            @endif
+            <span style="font-size: 1.1rem;">{{ $appSetting->app_name }}</span>
+        </div>
+        <div class="sidebar-menu">
+            @if (auth()->user()->is_admin==1)
+            <a href="/admin/settings" class="menu-item {{ request()->is('admin/settings') ? 'active' : '' }}">
+                <i class="fa-solid fa-gear"></i> Pengaturan
+            </a>
+            @endif
+            @if (auth()->user()->is_admin==1)
+            <a href="/" class="menu-item {{ request()->is('/') ? 'active' : '' }}">
+                <i class="fa-solid fa-chart-pie"></i> Dashboard
+            </a>
+            <a href="/admin/products" class="menu-item {{ request()->is('admin/products*') ? 'active' : '' }}">
+                <i class="fa-solid fa-box-open"></i> Kelola Produk
+            </a>
+            @endif
+            @if (auth()->user()->is_admin==1)
+            <a href="/admin/report" class="menu-item {{ request()->is('admin/report*') ? 'active' : '' }}">
+                <i class="fa-solid fa-receipt"></i> Data Transaksi
+            </a>
+            @endif
+            <a href="/pos" class="menu-item {{ request()->is('pos') ? 'active' : '' }}">
+                <i class="fa-solid fa-money-bill"></i> Kasir
+            </a>
+            @if (auth()->user()->is_admin==1)
+            <a href="/users" class="menu-item {{ request()->is('users') ? 'active' : '' }}">
+                <i class="fa-solid fa-users"></i> User
+            </a>
+            @endif
+            <form id="logout-form" action="/logout" method="POST" style="display: none;">
+                @csrf
+            </form>
+            <a href="/logout" class="menu-item" style="margin-top: auto;" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </a>
+        </div>
     </aside>
+
     <div class="main-content" style="background: {{ $appSetting->theme_color ?? '#4361ee' }}">
         <header class="topbar" style="background: {{ $appSetting->sidebar_color ?? '#111827' }}">
             <button class="menu-toggle" id="menu-toggle">
@@ -303,30 +360,43 @@
                 <span style="color: floralwhite">Halo, {{ auth()->user()->name ?? 'Admin' }}</span>
                 <img src="https://ui-avatars.com/api/?name={{ urlencode(auth()->user()->name ?? 'Admin') }}&background={{ str_replace('#', '', $appSetting->theme_color) ?? '4361ee' }}&color={{ str_replace('#', '', $appSetting->sidebar_color) ?? '111827' }}" alt="Admin">
             </div>
-    </header>
+        </header>
+
         @yield('container')
+
     </div>
+
     <script>
         const menuToggle = document.getElementById('menu-toggle');
         const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
 
-        menuToggle.addEventListener('click', () => {
+        // Fungsi membuka/menutup sidebar
+        function toggleSidebar() {
             sidebar.classList.toggle('active');
-        });
+            sidebarOverlay.classList.toggle('active');
+        }
+
+        menuToggle.addEventListener('click', toggleSidebar);
+        
+        // Menutup sidebar jika area overlay gelap diklik (hanya di mobile)
+        sidebarOverlay.addEventListener('click', toggleSidebar);
     </script>
-<script>
-    const successAlert = document.getElementById('success-alert');
-    if (successAlert) {
-        setTimeout(function() {
-            // Memberikan efek fade out sederhana
-            successAlert.style.opacity = '0';
-            
-            // Menghapus elemen dari tampilan setelah efek fade out selesai (0.5 detik)
+    
+    <script>
+        const successAlert = document.getElementById('success-alert');
+        if (successAlert) {
             setTimeout(function() {
-                successAlert.style.display = 'none';
-            }, 500);
-        }, 5000); // 10000 milidetik = 10 detik
-    }
-</script>
+                // Memberikan efek fade out sederhana
+                successAlert.style.transition = "opacity 0.5s ease";
+                successAlert.style.opacity = '0';
+                
+                // Menghapus elemen dari tampilan setelah efek fade out selesai (0.5 detik)
+                setTimeout(function() {
+                    successAlert.style.display = 'none';
+                }, 500);
+            }, 5000); // 5000 milidetik = 5 detik
+        }
+    </script>
 </body>
 </html>
