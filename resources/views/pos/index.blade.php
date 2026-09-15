@@ -127,8 +127,8 @@
         <h3 style="margin-bottom: 20px; text-align: center; color: #1f2937;">Tambah Item Manual</h3>
         
         <div style="margin-bottom: 15px;">
-            <label style="font-weight: 600; font-size: 0.9rem; color: #4b5563;">Nama Barang / Jasa:</label>
-            <input type="text" id="customItemName" placeholder="Contoh: Biaya Admin / Ongkir" style="width: 100%; padding: 12px; margin-top: 8px; border-radius: 10px; border: 1px solid #cbd5e1; outline: none; font-size: 1rem;">
+            <label style="font-weight: 600; font-size: 0.9rem; color: #4b5563;">Item Obat</label>
+            <input type="text" id="customItemName" style="width: 100%; padding: 12px; margin-top: 8px; border-radius: 10px; border: 1px solid #cbd5e1; outline: none; font-size: 1rem;">
         </div>
         
         <div style="margin-bottom: 25px;">
@@ -395,7 +395,7 @@
         divider();
 
         payload.cart.forEach(item => {
-            line(item.name + ' - ' + item.variant);
+            line(item.variant ? (item.name + ' - ' + item.variant) : item.name);
             line(padRow(item.qty + ' x ' + money(item.price), money(item.price * item.qty)));
         });
 
@@ -620,10 +620,10 @@
         const name = document.getElementById('customItemName').value.trim();
         const price = parseFloat(document.getElementById('customItemPrice').value);
 
-        if(!name) return alert('Nama barang/jasa tidak boleh kosong!');
+        if(!name) return alert('Nama Obat Tidak Boleh Kosong');
         if(isNaN(price) || price < 0) return alert('Masukkan nominal harga yang valid!');
 
-        addToCart({ name: name, variant: 'Manual Input', price: price });
+        addToCart({ name: name, variant: '', price: price });
         closeCustomModal();
     }
 
@@ -695,7 +695,7 @@
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div style="flex:1;">
                             <div style="font-weight:700; font-size:0.9rem; color:#1e293b;">${item.name}</div>
-                            <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">${item.variant}</div>
+                            ${item.variant ? `<div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">${item.variant}</div>` : ''}
                             <div style="font-weight:600; color:#111827; font-size:0.85rem;">Rp ${item.price.toLocaleString('id-ID')}</div>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; background:#f8fafc; padding:4px 8px; border-radius:8px; border:1px solid #e2e8f0;">

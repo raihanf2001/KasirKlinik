@@ -7,6 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Admin - Kasir Pintar</title>
+    <link rel="icon" type="image/png" href="{{ asset($appSetting->logo_path) }}">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -44,10 +45,16 @@
             color: white;
             display: flex;
             flex-direction: column;
-            transition: all 0.3s ease;
+            transition: transform 0.3s ease;
             position: fixed;
             height: 100vh;
             z-index: 100;
+            transform: translateX(0); /* Tampil secara default di semua ukuran layar */
+        }
+
+        /* Saat sidebar ditutup lewat tombol toggle (laptop/tablet/HP) */
+        .sidebar.closed {
+            transform: translateX(-100%);
         }
 
         .sidebar-header {
@@ -105,8 +112,14 @@
             margin-left: 260px;
             display: flex;
             flex-direction: column;
-            transition: all 0.3s ease;
+            transition: margin-left 0.3s ease, width 0.3s ease;
             width: calc(100% - 260px);
+        }
+
+        /* Saat sidebar ditutup di layar besar (laptop/tablet), konten melebar penuh */
+        .main-content.full {
+            margin-left: 0;
+            width: 100%;
         }
 
         /* Topbar */
@@ -123,7 +136,9 @@
         }
 
         .menu-toggle {
-            display: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             background: none;
             border: none;
             font-size: 1.5rem;
@@ -247,7 +262,7 @@
             white-space: nowrap;
         }
 
-        /* Overlay untuk Mobile Sidebar */
+        /* Overlay untuk Mobile Sidebar (hanya dipakai saat layar sempit) */
         .sidebar-overlay {
             position: fixed;
             top: 0;
@@ -268,6 +283,8 @@
 
         /* Responsive Design */
         @media (max-width: 768px) {
+            /* Di layar sempit, sidebar berperan sebagai overlay di atas konten,
+               jadi defaultnya tersembunyi dan konten utama tidak perlu digeser. */
             .sidebar {
                 transform: translateX(-100%);
             }
@@ -275,12 +292,12 @@
                 transform: translateX(0);
                 box-shadow: 4px 0 15px rgba(0,0,0,0.2);
             }
+            .sidebar.closed {
+                transform: translateX(-100%);
+            }
             .main-content {
                 margin-left: 0;
                 width: 100%;
-            }
-            .menu-toggle {
-                display: block;
             }
             .topbar {
                 padding: 15px 20px;
@@ -351,7 +368,7 @@
         </div>
     </aside>
 
-    <div class="main-content" style="background: {{ $appSetting->theme_color ?? '#4361ee' }}">
+    <div class="main-content" id="main-content" style="background: {{ $appSetting->theme_color ?? '#4361ee' }}">
         <header class="topbar" style="background: {{ $appSetting->sidebar_color ?? '#111827' }}">
             <button class="menu-toggle" id="menu-toggle">
                 <i class="fa-solid fa-bars"></i>
@@ -369,18 +386,47 @@
     <script>
         const menuToggle = document.getElementById('menu-toggle');
         const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
         const sidebarOverlay = document.getElementById('sidebar-overlay');
 
-        // Fungsi membuka/menutup sidebar
+        // Fungsi membuka/menutup sidebar di semua ukuran layar (HP, tablet, laptop).
+        // - Layar sempit (<=768px): sidebar tampil sebagai overlay di atas konten (pakai class "active").
+        // - Layar lebar (laptop/tablet besar): sidebar didorong keluar/masuk dan konten
+        //   menyesuaikan lebarnya (pakai class "closed" pada sidebar dan "full" pada konten).
         function toggleSidebar() {
-            sidebar.classList.toggle('active');
-            sidebarOverlay.classList.toggle('active');
+            const isMobileWidth = window.innerWidth <= 768;
+
+            if (isMobileWidth) {
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+            } else {
+                sidebar.classList.toggle('closed');
+                mainContent.classList.toggle('full');
+            }
         }
 
         menuToggle.addEventListener('click', toggleSidebar);
         
         // Menutup sidebar jika area overlay gelap diklik (hanya di mobile)
-        sidebarOverlay.addEventListener('click', toggleSidebar);
+        sidebarOverlay.addEventListener('click', function() {
+            sidebar.classList.remove('active');
+            sidebarOverlay.classList.remove('active');
+        });
+
+        // Saat ukuran layar berubah (misal rotasi HP/tablet atau resize window laptop),
+        // rapikan state agar tidak nyangkut di kondisi yang salah (mis. overlay aktif
+        // padahal sudah berpindah ke layar lebar, atau sebaliknya).
+        window.addEventListener('resize', function() {
+            const isMobileWidth = window.innerWidth <= 768;
+
+            if (isMobileWidth) {
+                sidebar.classList.remove('closed');
+                mainContent.classList.remove('full');
+            } else {
+                sidebar.classList.remove('active');
+                sidebarOverlay.classList.remove('active');
+            }
+        });
     </script>
     
     <script>
